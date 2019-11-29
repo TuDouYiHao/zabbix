@@ -1,0 +1,194 @@
+zabbix-server端安装
+
+1 自建zabbix源:
+             cd /etc/yum.repos.d/
+             vim zabbix.repo,写入以下内容：
+                                        [zabbix]
+                                        name=Zabbix Official Repository - \$basearch
+                                        baseurl=https://mirrors.aliyun.com/zabbix/zabbix/4.0/rhel/7/\$basearch/
+                                        enabled=1
+                                        gpgcheck=1
+                                        gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-ZABBIX-A14FE591
+ 
+                                        [zabbix-non-supported]
+                                        name=Zabbix Official Repository non-supported - \$basearch
+                                        baseurl=https://mirrors.aliyun.com/zabbix/non-supported/rhel/7/\$basearch/
+                                        enabled=1
+                                        gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-ZABBIX
+                                        gpgcheck=1
+       在执行：curl https://mirrors.aliyun.com/zabbix/RPM-GPG-KEY-ZABBIX-A14FE591 -o /etc/pki/rpm-gpg/RPM-GPG-KEY-ZABBIX-A14FE591
+              curl https://mirrors.aliyun.com/zabbix/RPM-GPG-KEY-ZABBIX -o /etc/pki/rpm-gpg/RPM-GPG-KEY-ZABBIX
+
+    
+    7  yum makecache -y
+
+
+    安装相关软件：
+    8  yum -y install zabbix-server-mysql zabbix-web-mysql zabbix-agent zabbix-get
+    9  yum -y install mariadb-server zabbix-web
+   10  yum -y install zabbix-web
+   11  
+   12  vi /etc/my.cnf 写入以下内容：
+        user=mysql
+        character-set-server=utf8
+        innodb_file_per_table=1  --让innodb的每个表文件单独存储
+   13  systemctl start mariadb  ---启动服务
+   14  systemctl enable mariadb  --设置为开机自启动
+   15  ps -ef | grep mysql  --查看服务是否成功
+   16  mysqladmin -uroot password admin  --设置root用户密码为admin
+   17  mysql -uroot -padmin  --登录MySQL
+   在数据库中操作
+       create database zabbix character set utf8; --设置字符集为UTF8，防止web页面切换中文乱码
+       grant all privileges on zabbix.* to zabbix@'localhost' identified by 'zabbix';
+       grant all privileges on zabbix.* to zabbix@'127.0.0.1' identified by 'zabbix';
+       flush privileges; --刷新权限，让其立即生效
+   
+   19  cd /usr/share/doc/zabbix-server-mysql-4.0.14/ --进入对应版本目录
+   23  gunzip create.sql.gz --将SQL文件解压缩
+   25  mysql -uzabbix -h127.0.0.1 -pzabbix --以zabbix用户登录，执行如下操作：
+          use zabbix;
+          source /usr/share/doc/zabbix-server-mysql-4.0.14/create.sql
+          exit
+
+  
+   29  vim /etc/zabbix/zabbix_server.conf,修改以下内容：
+                                                      DBHost=127.0.0.1
+                                                      DBName=zabbix
+                                                      DBUser=zabbix
+                                                      DBPassword=zabbix
+                                                      DBPort=3306
+                                                      SourceIP=
+
+  开启zabbix相关服务：
+                   systemctl start zabbix-server  
+                   systemctl start httpd
+                   ps -ef|grep zabbix  --查看进程
+                   systemctl enable zabbix-server  --设置为开机启动
+                   mkdir -p /etc/zabbix/alertscripts /etc/zabbix/externalscripts  -创建告警和拓展脚本目录
+                   systemctl enable httpd  --设置为开机自启动
+   设置防火墙规则                
+               firewall-cmd --permanent --add-port=80/tcp
+               firewall-cmd --permanent --add-port=10050/tcp
+               firewall-cmd --permanent --add-port=10051/tcp
+               firewall-cmd reload
+   selinux设置：
+              setsebool -p httpd_can_connect_zabbix on
+              setsebool -p httpd_can_network_connect_db on
+              setsebool -P httpd_can_connect_zabbix on
+              setsebool -P httpd_can_network_connect_db on
+              vim /etc/selinux/config
+              setenforce 0
+
+   46  vim /etc/php.ini 修改以下内容：
+                                    data.timezone=Asia/Shanghai
+                                    max_input_time=300
+                                    post_max_size=16M
+                                    max_execution_time=300
+  配置zabbix：打开浏览器，输入http://IP/zabbix
+
+
+
+
+
+
+zabbix-agent端安装
+
+1 自建zabbix源:
+             cd /etc/yum.repos.d/
+             vim zabbix.repo,写入以下内容：
+                                        [zabbix]
+                                        name=Zabbix Official Repository - \$basearch
+                                        baseurl=https://mirrors.aliyun.com/zabbix/zabbix/4.0/rhel/7/\$basearch/
+                                        enabled=1
+                                        gpgcheck=1
+                                        gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-ZABBIX-A14FE591
+ 
+                                        [zabbix-non-supported]
+                                        name=Zabbix Official Repository non-supported - \$basearch
+                                        baseurl=https://mirrors.aliyun.com/zabbix/non-supported/rhel/7/\$basearch/
+                                        enabled=1
+                                        gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-ZABBIX
+                                        gpgcheck=1
+       在执行：curl https://mirrors.aliyun.com/zabbix/RPM-GPG-KEY-ZABBIX-A14FE591 -o /etc/pki/rpm-gpg/RPM-GPG-KEY-ZABBIX-A14FE591
+              curl https://mirrors.aliyun.com/zabbix/RPM-GPG-KEY-ZABBIX -o /etc/pki/rpm-gpg/RPM-GPG-KEY-ZABBIX
+
+    
+    7  yum makecache -y
+
+    安装相关软件：
+                yum -y install zabbix zabbix-agent
+ 防火墙设置：
+           firewall-cmd --permanent --add-port=10050/tcp
+           firewall-cmd --reload
+
+  配置zabbix-agent
+                 vim /etc/zabbix/zabbix_agentd.conf
+                Server=服务端IP  --被动模式
+                ServerActive=服务端IP --主动模式
+                Hostname=zabbix server  --主动模式必须配置   
+
+  添加到开机自启动：
+                systemctl enable zabbix-agent
+                systemctl start zabbix-agent                                   
+
+
+                
+
+
+
+
+如果zabbix官方源不可以。则自建yum源或更换第三方源
+
+国内zabbix源总结
+ 
+目前发现的有以下几个站点:
+1.阿里巴巴开源镜像站(推荐使用)
+地址：https://mirrors.aliyun.com/zabbix/
+2.华为开源镜像站(推荐使用)
+地址：https://mirrors.huaweicloud.com/zabbix/
+3.清华大学开源软件镜像站
+地址：https://mirror.tuna.tsinghua.edu.cn/zabbix/
+4.上海大学开源镜像站
+地址：https://mirrors.shu.edu.cn/zabbix/
+ RHEL7/CentOS7
+cat <<EOF > /etc/yum.repos.d/zabbix.repo
+[zabbix]
+name=Zabbix Official Repository - \$basearch
+baseurl=https://mirrors.aliyun.com/zabbix/zabbix/4.0/rhel/7/\$basearch/
+enabled=1
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-ZABBIX-A14FE591
+ 
+[zabbix-non-supported]
+name=Zabbix Official Repository non-supported - \$basearch
+baseurl=https://mirrors.aliyun.com/zabbix/non-supported/rhel/7/\$basearch/
+enabled=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-ZABBIX
+gpgcheck=1
+EOF
+ 添加gpgkey
+curl https://mirrors.aliyun.com/zabbix/RPM-GPG-KEY-ZABBIX-A14FE591 \
+-o /etc/pki/rpm-gpg/RPM-GPG-KEY-ZABBIX-A14FE591
+ 
+curl https://mirrors.aliyun.com/zabbix/RPM-GPG-KEY-ZABBIX \
+-o /etc/pki/rpm-gpg/RPM-GPG-KEY-ZABBIX
+ 添加之后即可使用
+
+yum makecache -y
+yum install zabbix-<...>
+
+
+ Ubuntu 16.04
+cat > /etc/apt/sources.list.d/zabbix.list << EOF
+deb https://mirrors.aliyun.com/zabbix/zabbix/4.0/ubuntu xenial main
+deb-src https://mirrors.aliyun.com/zabbix/zabbix/4.0/ubuntu xenial main
+EOF
+ 添加key
+curl -o - "https://mirrors.aliyun.com/zabbix/zabbix-official-repo.key" | apt-key add -
+ 更新源，安装相关包
+apt-get update
+apt-get install -y zabbix-<...>
+
+
+
+
